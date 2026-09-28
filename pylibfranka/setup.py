@@ -121,45 +121,9 @@ class CMakeBuild(build_ext):
                 if not target.exists():
                     shutil.copy2(built_lib, target)
 
-        # Post-build step (macOS): bundle the non-system dylibs into the package.
-        # Runs before stub generation, which imports the extension and thereby
-        # verifies that it still loads.
-        self.delocate(extdir)
-
         # Post-build step: generate .pyi type stubs so LSP servers / IDEs get
         # type hints for the compiled bindings (pybind11 does not emit stubs).
         self.generate_stubs(ext, extdir)
-
-    def delocate(self, extdir):
-        """Copy the non-system dylibs of the extension into ``pylibfranka/.dylibs``.
-
-        This is the macOS counterpart of ``auditwheel repair`` on Linux. It runs
-        on the build tree instead of on a finished wheel, so a plain
-        ``pip install`` also yields a self-contained package that does not load
-        libraries from the build machine (e.g. from Homebrew). Absolute rpaths
-        (build tree, Homebrew prefix) are removed from the binaries.
-        """
-        if sys.platform != "darwin":
-            return
-
-        if os.environ.get("PYLIBFRANKA_SKIP_DELOCATE"):
-            print("WARNING: skipping delocate (PYLIBFRANKA_SKIP_DELOCATE set)")
-            return
-
-        try:
-            from delocate import delocate_path
-        except ImportError as exc:
-            raise RuntimeError(
-                "delocate is required to bundle the dependencies on macOS. Install "
-                "'delocate' (a build dependency) or set PYLIBFRANKA_SKIP_DELOCATE=1 "
-                "to link against the libraries of the build machine instead."
-            ) from exc
-
-        package_dir = Path(extdir)
-        copied_libs = delocate_path(
-            str(package_dir), str(package_dir / ".dylibs"), sanitize_rpaths=True
-        )
-        print(f"delocate: bundled {len(copied_libs)} libraries into {package_dir / '.dylibs'}")
 
     def generate_stubs(self, ext, extdir):
         """Generate PEP 561 stub files (.pyi) for the compiled extension.

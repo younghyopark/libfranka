@@ -8,7 +8,6 @@ requires = [
     "cmake>=3.16",
     "patchelf>=0.10",
     "auditwheel>=6.0.0",
-    "delocate>=0.11; sys_platform == 'darwin'",
     "build>=0.10",
 ]
 build-backend = "setuptools.build_meta"
