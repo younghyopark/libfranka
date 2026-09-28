@@ -3,7 +3,9 @@
 #include <gtest/gtest.h>
 
 #include <atomic>
+#include <chrono>
 #include <cstring>
+#include <future>
 #include <limits>
 
 #include <franka/active_control.h>
@@ -629,12 +631,6 @@ TEST_F(RobotImplTests, CanCancelMotion) {
   EXPECT_TRUE(default_robot.motionGeneratorRunning());
 
   default_server
-      .onSendUDP<RobotState>([](RobotState& robot_state) {
-        robot_state.motion_generator_mode = MotionGeneratorMode::kIdle;
-        robot_state.controller_mode = ControllerMode::kCartesianImpedance;
-        robot_state.robot_mode = RobotMode::kIdle;
-      })
-      .spinOnce()
       .waitForCommand<StopMove>([&](const StopMove::Request&) {
         default_server.sendResponse<Move>(
             move_id, []() { return Move::Response(Move::Status::kPreempted); });
@@ -642,7 +638,53 @@ TEST_F(RobotImplTests, CanCancelMotion) {
       })
       .spinOnce();
 
-  default_robot.cancelMotion(id);
+  // The robot only sends states without the motion after receiving the StopMove command.
+  auto cancelled = std::async(std::launch::async, [&]() { default_robot.cancelMotion(id); });
+  default_server
+      .onSendUDP<RobotState>([](RobotState& robot_state) {
+        robot_state.motion_generator_mode = MotionGeneratorMode::kIdle;
+        robot_state.controller_mode = ControllerMode::kCartesianImpedance;
+        robot_state.robot_mode = RobotMode::kIdle;
+      })
+      .spinOnce();
+  cancelled.get();
+  EXPECT_FALSE(default_robot.motionGeneratorRunning());
+}
+
+TEST_F(RobotImplTests, CancelMotionDoesNotStopEndedMotionAgain) {
+  Move::Deviation maximum_path_deviation{0, 1, 2};
+  Move::Deviation maximum_goal_pose_deviation{3, 4, 5};
+
+  default_server
+      .onSendUDP<RobotState>([](RobotState& robot_state) {
+        robot_state.motion_generator_mode = MotionGeneratorMode::kCartesianVelocity;
+        robot_state.controller_mode = ControllerMode::kCartesianImpedance;
+        robot_state.robot_mode = RobotMode::kMove;
+      })
+      .spinOnce()
+      .waitForCommand<Move>(
+          [&](const Move::Request&) { return Move::Response(Move::Status::kMotionStarted); })
+      .spinOnce();
+
+  auto id = default_robot.startMotion(Move::ControllerMode::kCartesianImpedance,
+                                      Move::MotionGeneratorMode::kCartesianVelocity,
+                                      maximum_path_deviation, maximum_goal_pose_deviation,
+                                      kUseNoAsyncMotionGenerator, kNoMaximumVelocities);
+  EXPECT_TRUE(default_robot.motionGeneratorRunning());
+
+  // The motion ended before cancelling it, e.g. with Robot::stop(). The robot does not answer
+  // another StopMove command then, so cancelling would time out if it sent one.
+  default_server
+      .onSendUDP<RobotState>([](RobotState& robot_state) {
+        robot_state.motion_generator_mode = MotionGeneratorMode::kIdle;
+        robot_state.controller_mode = ControllerMode::kCartesianImpedance;
+        robot_state.robot_mode = RobotMode::kIdle;
+      })
+      .spinOnce();
+
+  auto start = std::chrono::steady_clock::now();
+  EXPECT_NO_THROW(default_robot.cancelMotion(id));
+  EXPECT_LT(std::chrono::steady_clock::now() - start, std::chrono::seconds(1));
   EXPECT_FALSE(default_robot.motionGeneratorRunning());
 }
 

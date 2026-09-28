@@ -328,6 +328,12 @@ class Robot::Impl : public RobotControl {
       const std::optional<research_interface::robot::MotionGeneratorCommand>& motion_command,
       const std::optional<research_interface::robot::ControllerCommand>& control_command) const;
   research_interface::robot::RobotState receiveRobotState();
+  /**
+   * Updates the state with the most recent robot state that is already available, without waiting.
+   *
+   * @return True if a newer robot state was available.
+   */
+  bool updateStateIfAvailable();
   void updateState(const research_interface::robot::RobotState& robot_state);
 
   std::unique_ptr<Network> network_;

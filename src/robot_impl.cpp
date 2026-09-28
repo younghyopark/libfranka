@@ -2,7 +2,10 @@
 // Use of this source code is governed by the Apache-2.0 license, see LICENSE
 #include "robot_impl.h"
 
+#include <chrono>
+#include <optional>
 #include <sstream>
+#include <thread>
 
 #include "franka/control_tools.h"
 #include "franka/logging/logger.hpp"
@@ -12,6 +15,10 @@
 namespace franka {
 
 namespace {
+
+// Maximum time for the robot to stop a motion when cancelling it. Cancelling happens in destructors,
+// which must not block forever if the robot does not respond.
+constexpr std::chrono::seconds kCancelMotionTimeout{5};
 
 inline ControlException createControlException(const char* message,
                                                research_interface::robot::Move::Status move_status,
@@ -215,6 +222,27 @@ research_interface::robot::RobotState Robot::Impl::receiveRobotState() {
 
   updateState(latest_accepted_state);
   return latest_accepted_state;
+}
+
+bool Robot::Impl::updateStateIfAvailable() {
+  research_interface::robot::RobotState latest_state{};
+  {
+    std::lock_guard<std::mutex> lock(message_id_mutex_);
+    latest_state.message_id = message_id_;
+  }
+
+  bool available = false;
+  research_interface::robot::RobotState received_state{};
+  while (network_->udpReceive(&received_state)) {
+    if (received_state.message_id > latest_state.message_id) {
+      latest_state = received_state;
+      available = true;
+    }
+  }
+  if (available) {
+    updateState(latest_state);
+  }
+  return available;
 }
 
 void Robot::Impl::updateState(const research_interface::robot::RobotState& robot_state) {
@@ -472,16 +500,42 @@ void Robot::Impl::cancelMotion(uint32_t motion_id) {
     return;
   }
 
-  try {
-    executeCommand<research_interface::robot::StopMove>();
-  } catch (const CommandException& e) {
-    throw ControlException(e.what());
-  }
+  // The motion might have ended already, e.g. with Robot::stop(). The robot does not answer another
+  // StopMove command then, so only stop the motion if the latest robot state shows it running.
+  bool motion_ended =
+      updateStateIfAvailable() && !motionGeneratorRunning() && !controllerRunning();
 
-  research_interface::robot::RobotState robot_state;
-  do {  // NOLINT(cppcoreguidelines-avoid-do-while)
-    robot_state = receiveRobotState();
-  } while (motionGeneratorRunning() || controllerRunning());
+  if (!motion_ended) {
+    using research_interface::robot::StopMove;
+    auto deadline = std::chrono::steady_clock::now() + kCancelMotionTimeout;
+    auto throw_if_not_stopping = [this, &deadline]() {
+      if (!network_->isTcpSocketAlive()) {
+        throw NetworkException("libfranka robot: TCP connection closed while cancelling motion.");
+      }
+      if (std::chrono::steady_clock::now() > deadline) {
+        logging::logWarn("libfranka robot: Robot did not stop the motion in time, giving up.");
+        throw NetworkException("libfranka robot: Timeout while cancelling motion.");
+      }
+    };
+
+    uint32_t command_id = network_->tcpSendRequest<StopMove>();
+    std::optional<StopMove::Response> response;
+    while (!network_->tcpReceiveResponse<StopMove>(
+        command_id, [&response](const StopMove::Response& received) { response.emplace(received); })) {
+      throw_if_not_stopping();
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    try {
+      handleCommandResponse<StopMove>(*response);
+    } catch (const CommandException& e) {
+      throw ControlException(e.what());
+    }
+
+    do {  // NOLINT(cppcoreguidelines-avoid-do-while)
+      receiveRobotState();
+      throw_if_not_stopping();
+    } while (motionGeneratorRunning() || controllerRunning());
+  }
 
   // Ignore Move response.
   // TODO (FWA): It is not guaranteed that the Move response won't come later
