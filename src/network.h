@@ -143,7 +143,11 @@ T Network::udpBlockingReceiveUnsafe() try {
 
   return *reinterpret_cast<T*>(buffer.data());
 } catch (const Poco::Exception& e) {
-  tcp_socket_.shutdown();
+  // shutdown() fails with ENOTCONN on macOS if the peer already closed the connection.
+  try {
+    tcp_socket_.shutdown();
+  } catch (...) {
+  }
   using namespace std::string_literals;  // NOLINT(google-build-using-namespace)
   throw NetworkException("libfranka: UDP receive: "s + e.what());
 }

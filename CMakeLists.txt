@@ -76,7 +76,9 @@ if(BUILD_COVERAGE)
 endif()
 
 # Suppress false positive warnings about string operations (aka GetRobotModel)
-add_compile_options(-Wno-stringop-overflow -Wno-array-bounds)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  add_compile_options(-Wno-stringop-overflow -Wno-array-bounds)
+endif()
 
 ## Load dependencies
 include(FetchFMT)

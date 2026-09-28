@@ -60,7 +60,7 @@ inline bool isHomogeneousTransformation(const std::array<double, 16>& transform)
  * Determines whether the current OS kernel is a realtime kernel.
  *
  * On Linux, this checks for the existence of `/sys/kernel/realtime`.
- * On Windows, this always returns true.
+ * On Windows and macOS, this always returns true.
  *
  * @return True if running a realtime kernel, false otherwise.
  */

@@ -5,9 +5,22 @@
 #include <memory>
 #include <sstream>
 
+#include "platform.h"
+
 using namespace std::string_literals;  // NOLINT(google-build-using-namespace)
 
 namespace franka {
+
+namespace {
+
+#ifdef LIBFRANKA_MACOS
+// macOS names the keepalive idle time option TCP_KEEPALIVE instead of TCP_KEEPIDLE.
+constexpr int kTcpKeepIdle = TCP_KEEPALIVE;
+#else
+constexpr int kTcpKeepIdle = TCP_KEEPIDLE;
+#endif
+
+}  // anonymous namespace
 
 Network::Network(const std::string& franka_address,
                  uint16_t franka_port,
@@ -26,7 +39,7 @@ Network::Network(const std::string& franka_address,
     if (std::get<0>(tcp_keepalive)) {
       tcp_socket_.setKeepAlive(true);
       try {
-        tcp_socket_.setOption(IPPROTO_TCP, TCP_KEEPIDLE, std::get<1>(tcp_keepalive));
+        tcp_socket_.setOption(IPPROTO_TCP, kTcpKeepIdle,std::get<1>(tcp_keepalive));
         tcp_socket_.setOption(IPPROTO_TCP, TCP_KEEPCNT, std::get<2>(tcp_keepalive));
         tcp_socket_.setOption(IPPROTO_TCP, TCP_KEEPINTVL, std::get<3>(tcp_keepalive));
       } catch (...) {
@@ -60,8 +73,16 @@ uint16_t Network::udpPort() const noexcept {
   return udp_port_;
 }
 
-bool Network::isTcpSocketAlive() const noexcept {
-  return !tcp_socket_.poll(Poco::Timespan(0), Poco::Net::Socket::SELECT_ERROR);
+bool Network::isTcpSocketAlive() const noexcept try {
+  if (tcp_socket_.poll(Poco::Timespan(0), Poco::Net::Socket::SELECT_ERROR)) {
+    return false;
+  }
+  // A readable socket without any available bytes means the peer closed the connection. This is
+  // how a closed connection shows up on macOS, where poll() does not report it as an error.
+  return !(tcp_socket_.poll(Poco::Timespan(0), Poco::Net::Socket::SELECT_READ) &&
+           tcp_socket_.available() == 0);
+} catch (const Poco::Exception&) {
+  return false;
 }
 
 void Network::tcpThrowIfConnectionClosed() try {

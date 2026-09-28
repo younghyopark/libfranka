@@ -18,10 +18,13 @@
 #endif
 
 #undef LIBFRANKA_WINDOWS
+#undef LIBFRANKA_MACOS
 #undef LIBFRANKA_LINUX
 
 #if defined(_WIN32) || defined(_WIN64)
 #define LIBFRANKA_WINDOWS
+#elif defined(__APPLE__) && defined(__MACH__)
+#define LIBFRANKA_MACOS
 #elif defined(__unix) || defined(__unix__)
 #define LIBFRANKA_LINUX
 #endif

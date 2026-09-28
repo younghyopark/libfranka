@@ -40,5 +40,10 @@ target_link_libraries(_pylibfranka PRIVATE
     pinocchio::pinocchio
 )
 
+# Load the libfranka copy that is packaged next to the extension module
+if(APPLE)
+    set_target_properties(_pylibfranka PROPERTIES BUILD_RPATH "@loader_path")
+endif()
+
 # Install the Python module
 install(TARGETS _pylibfranka DESTINATION pylibfranka)
