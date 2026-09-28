@@ -56,7 +56,13 @@ sudo apt-get install -y build-essential cmake libeigen3-dev libpoco-dev python3-
 
 #### Installing Prerequisites on macOS
 
-pylibfranka can be built from source on macOS (Apple Silicon). There are no pre-built wheels for macOS, and the installed pylibfranka links against the Homebrew packages below at runtime, so keep them installed.
+On Apple Silicon Macs with macOS 15 or newer, you can install an unofficial pre-built version of this fork from PyPI. It bundles its native dependencies, so it needs no Homebrew:
+
+```bash
+pip install pylibfranka-macos
+```
+
+It installs the same `pylibfranka` module, so do not install it together with a pylibfranka built from source. On other Macs, or to build pylibfranka yourself, follow the steps below. A pylibfranka built from source links against the Homebrew packages below at runtime, so keep them installed.
 
 1. Install the Xcode Command Line Tools, which provide the C++ compiler:
 

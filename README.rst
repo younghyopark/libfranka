@@ -48,7 +48,7 @@ Before using **libfranka**, ensure your system meets the following requirements:
    - Ubuntu 24.04 LTS (Noble Numbat)
    - Ubuntu 26.04 LTS (Resolute Raccoon)
    - `Linux with PREEMPT_RT patched kernel <https://frankarobotics.github.io/docs/doc/libfranka/docs/real_time_kernel.html>`_ recommended for real-time control
-   - macOS on Apple Silicon (experimental, build from source; see `Installing Prerequisites on macOS`_)
+   - macOS on Apple Silicon (experimental; see `Installing Prerequisites on macOS`_)
 
 **Build Tools** (for building from source):
    - GCC 9 or later
@@ -726,7 +726,13 @@ Installing Prerequisites on Ubuntu/Debian
 Installing Prerequisites on macOS
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-pylibfranka can be built from source on macOS (Apple Silicon). There are no pre-built wheels for macOS, and the installed pylibfranka links against the Homebrew packages below at runtime, so keep them installed.
+On Apple Silicon Macs with macOS 15 or newer, you can install an unofficial pre-built version of this fork from PyPI. It bundles its native dependencies, so it needs no Homebrew:
+
+.. code-block:: bash
+
+   pip install pylibfranka-macos
+
+It installs the same ``pylibfranka`` module, so do not install it together with a pylibfranka built from source. On other Macs, or to build pylibfranka yourself, follow the steps below. A pylibfranka built from source links against the Homebrew packages below at runtime, so keep them installed.
 
 1. Install the Xcode Command Line Tools, which provide the C++ compiler:
 
