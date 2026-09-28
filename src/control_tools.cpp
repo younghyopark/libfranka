@@ -68,6 +68,19 @@ bool setCurrentThreadToHighestSchedulerPriority(std::string* error_message) {
 
   return true;
 #elif defined(LIBFRANKA_MACOS)
+  if (macosBusyWait()) {
+    // A busy-waiting time constraint thread gets demoted by the scheduler, so use the highest
+    // QoS class instead. It keeps the thread on a performance core.
+    int result = pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+    if (result != 0) {
+      if (error_message != nullptr) {
+        *error_message = "libfranka: unable to set QoS class: "s + std::strerror(result);
+      }
+      return false;
+    }
+    return true;
+  }
+
   // SCHED_FIFO on macOS only raises the priority within the timeshare band. Real-time scheduling
   // requires the Mach time constraint policy, parametrized for the 1 kHz control cycle.
   constexpr uint64_t kPeriodNs = 1'000'000;

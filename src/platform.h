@@ -28,3 +28,26 @@
 #elif defined(__unix) || defined(__unix__)
 #define LIBFRANKA_LINUX
 #endif
+
+#ifdef LIBFRANKA_MACOS
+#include <cstdlib>
+#include <cstring>
+
+namespace franka {
+
+/**
+ * Whether to busy-wait for robot states on macOS.
+ *
+ * A thread that sleeps between control cycles is often woken on an efficiency core or a
+ * clocked-down core, which slows down the following cycle several times. Therefore, libfranka
+ * busy-waits for robot states in a USER_INTERACTIVE thread by default. Setting the environment
+ * variable LIBFRANKA_MACOS_BUSY_WAIT=0 restores sleeping in a Mach time constraint thread, which
+ * saves power but misses more control cycles.
+ */
+inline bool macosBusyWait() {
+  const char* value = std::getenv("LIBFRANKA_MACOS_BUSY_WAIT");
+  return value == nullptr || std::strcmp(value, "0") != 0;
+}
+
+}  // namespace franka
+#endif

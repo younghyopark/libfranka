@@ -26,7 +26,11 @@ Network::Network(const std::string& franka_address,
                  uint16_t franka_port,
                  std::chrono::milliseconds tcp_timeout,
                  std::chrono::milliseconds udp_timeout,
-                 std::tuple<bool, int, int, int> tcp_keepalive) {
+                 std::tuple<bool, int, int, int> tcp_keepalive)
+    : udp_timeout_(udp_timeout) {
+#ifdef LIBFRANKA_MACOS
+  udp_busy_wait_ = macosBusyWait();
+#endif
   try {
     Poco::Timespan poco_timeout(1000L * tcp_timeout.count());
     Poco::Net::SocketAddress address(franka_address, franka_port);
@@ -39,7 +43,7 @@ Network::Network(const std::string& franka_address,
     if (std::get<0>(tcp_keepalive)) {
       tcp_socket_.setKeepAlive(true);
       try {
-        tcp_socket_.setOption(IPPROTO_TCP, kTcpKeepIdle,std::get<1>(tcp_keepalive));
+        tcp_socket_.setOption(IPPROTO_TCP, kTcpKeepIdle, std::get<1>(tcp_keepalive));
         tcp_socket_.setOption(IPPROTO_TCP, TCP_KEEPCNT, std::get<2>(tcp_keepalive));
         tcp_socket_.setOption(IPPROTO_TCP, TCP_KEEPINTVL, std::get<3>(tcp_keepalive));
       } catch (...) {
@@ -71,6 +75,15 @@ Network::~Network() {
 
 uint16_t Network::udpPort() const noexcept {
   return udp_port_;
+}
+
+void Network::udpBusyWait(int bytes) {
+  auto deadline = std::chrono::steady_clock::now() + udp_timeout_;
+  while (udp_socket_.available() < bytes) {
+    if (std::chrono::steady_clock::now() > deadline) {
+      throw Poco::TimeoutException();
+    }
+  }
 }
 
 bool Network::isTcpSocketAlive() const noexcept try {

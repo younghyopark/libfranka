@@ -69,6 +69,10 @@ bool hasRealtimeKernel();
 /**
  * Sets the current thread to the highest possible scheduler priority.
  *
+ * On macOS, this sets the QoS class USER_INTERACTIVE, because libfranka busy-waits for robot
+ * states there. With the environment variable LIBFRANKA_MACOS_BUSY_WAIT=0, it sets the Mach time
+ * constraint policy instead.
+ *
  * @param[out] error_message Contains an error message if the scheduler priority
  * cannot be set successfully.
  *

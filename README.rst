@@ -775,7 +775,8 @@ Notes for macOS:
 
 - If ``brew upgrade`` moves one of these packages to a new major version, ``import pylibfranka`` fails until you rebuild it with ``pip install --force-reinstall --no-cache-dir ./pylibfranka`` (or the ``git+https://...`` URL above).
 - If the conda ``base`` environment is on your ``PATH`` (for example when installing into ``base`` itself), its ``fmt`` package conflicts with Homebrew's and the build fails at link time. Use a separate environment, or prefix the ``pip install`` and ``cmake`` commands with ``CMAKE_PREFIX_PATH=/opt/homebrew``.
-- macOS is not a real-time operating system. libfranka runs the control thread with the Mach time-constraint policy, but connect the robot via wired Ethernet and check with libfranka's ``communication_test`` example that your setup keeps up with the 1 kHz control loop. From the repository root:
+- macOS is not a real-time operating system. To keep up with the 1 kHz control loop, libfranka busy-waits for robot states on macOS instead of sleeping between control cycles. This keeps one performance core fully busy while a control loop runs and drains the battery faster, so plug in the Mac when controlling the robot. The thread that creates the ``Robot`` gets the highest scheduling priority, so run the control loop on that thread. Set ``LIBFRANKA_MACOS_BUSY_WAIT=0`` to sleep between control cycles instead, at the cost of more missed cycles.
+- Connect the robot via wired Ethernet and check with libfranka's ``communication_test`` example that your setup keeps up with the 1 kHz control loop. From the repository root:
 
   .. code-block:: bash
 

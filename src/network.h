@@ -97,10 +97,19 @@ class Network {
   template <typename T>
   void tcpReadFromBuffer(std::chrono::microseconds timeout);
 
+  /**
+   * Spins until at least the given number of bytes can be read from the UDP socket.
+   *
+   * @throw Poco::TimeoutException if no data arrives within the UDP timeout.
+   */
+  void udpBusyWait(int bytes);
+
   Poco::Net::StreamSocket tcp_socket_;
   Poco::Net::DatagramSocket udp_socket_;
   Poco::Net::SocketAddress udp_server_address_;
   uint16_t udp_port_;
+  std::chrono::milliseconds udp_timeout_;
+  bool udp_busy_wait_{false};
 
   std::mutex tcp_mutex_;
   std::mutex udp_mutex_;
@@ -134,6 +143,9 @@ template <typename T>
 T Network::udpBlockingReceiveUnsafe() try {
   std::array<uint8_t, sizeof(T)> buffer{};
 
+  if (udp_busy_wait_) {
+    udpBusyWait(static_cast<int>(buffer.size()));
+  }
   int bytes_received =
       udp_socket_.receiveFrom(buffer.data(), static_cast<int>(buffer.size()), udp_server_address_);
 
