@@ -1,0 +1,73 @@
+name: pylibfranka-macos wheels
+
+# Builds and tests the unofficial pylibfranka-macos wheels for Apple Silicon on pushes, and
+# publishes them to PyPI when run manually with `publish`. It is not triggered by tags,
+# because pushing any tag also triggers the release workflows inherited from libfranka.
+on:
+  push:
+    branches: [macos-support]
+    paths:
+      - CMakeLists.txt
+      - cmake/**
+      - common
+      - include/**
+      - src/**
+      - pylibfranka/**
+      - .github/workflows/pylibfranka-macos.yml
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the wheels to PyPI
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    name: Build macOS wheels
+    # Homebrew's macOS 15 bottles make the wheels work on macOS 15 and newer.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Rename the package to pylibfranka-macos
+        run: python3 pylibfranka/scripts/prepare_macos_dist.py
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v4.2.1
+        with:
+          package-dir: pylibfranka
+          output-dir: wheelhouse
+        env:
+          CIBW_BUILD: cp310-* cp311-* cp312-* cp313-* cp314-*
+          CIBW_ARCHS_MACOS: arm64
+          CIBW_BEFORE_ALL_MACOS: brew install pinocchio poco eigen console_bridge tinyxml2 fmt
+          CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=15.0 CMAKE_PREFIX_PATH=/opt/homebrew
+          CIBW_REPAIR_WHEEL_COMMAND_MACOS: >-
+            pip install delocate &&
+            python {project}/pylibfranka/scripts/repair_macos_wheel.py {wheel} {dest_dir}
+          CIBW_TEST_COMMAND: python {project}/pylibfranka/scripts/check_macos_wheel.py
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pylibfranka-macos-wheels
+          path: wheelhouse/*.whl
+
+  publish:
+    name: Publish to PyPI
+    if: inputs.publish
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/pylibfranka-macos/
+    permissions:
+      id-token: write  # PyPI trusted publishing
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: pylibfranka-macos-wheels
+          path: dist
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
