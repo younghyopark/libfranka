@@ -48,6 +48,7 @@ Before using **libfranka**, ensure your system meets the following requirements:
    - Ubuntu 24.04 LTS (Noble Numbat)
    - Ubuntu 26.04 LTS (Resolute Raccoon)
    - `Linux with PREEMPT_RT patched kernel <https://frankarobotics.github.io/docs/doc/libfranka/docs/real_time_kernel.html>`_ recommended for real-time control
+   - macOS on Apple Silicon (experimental, build from source; see `Installing Prerequisites on macOS`_)
 
 **Build Tools** (for building from source):
    - GCC 9 or later
@@ -721,6 +722,66 @@ Installing Prerequisites on Ubuntu/Debian
 
    sudo apt-get update
    sudo apt-get install -y build-essential cmake libeigen3-dev libpoco-dev python3-dev
+
+Installing Prerequisites on macOS
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+pylibfranka can be built from source on macOS (Apple Silicon). There are no pre-built wheels for macOS, and the installed pylibfranka links against the Homebrew packages below at runtime, so keep them installed.
+
+1. Install the Xcode Command Line Tools, which provide the C++ compiler:
+
+   .. code-block:: bash
+
+      xcode-select --install
+
+2. Install the dependencies with `Homebrew <https://brew.sh>`_:
+
+   .. code-block:: bash
+
+      brew install cmake pinocchio poco eigen console_bridge tinyxml2 fmt
+
+   .. list-table::
+      :header-rows: 1
+      :widths: 30 70
+
+      * - Package
+        - Used for
+      * - ``pinocchio``
+        - Robot model (kinematics and dynamics); also installs ``urdfdom``, ``boost`` and ``coal``
+      * - ``poco``
+        - Network communication with the robot
+      * - ``eigen``
+        - Linear algebra
+      * - ``console_bridge``, ``tinyxml2``
+        - URDF parsing
+      * - ``fmt``
+        - Logging
+      * - ``cmake``
+        - Build system
+
+3. Clone the repository including its submodules and continue with `Build and Install`_, inside an activated conda environment or virtualenv:
+
+   .. code-block:: bash
+
+      git clone --recurse-submodules -b macos-support https://github.com/younghyopark/libfranka.git
+
+   Alternatively, install directly without cloning:
+
+   .. code-block:: bash
+
+      pip install "git+https://github.com/younghyopark/libfranka@macos-support#subdirectory=pylibfranka"
+
+Notes for macOS:
+
+- If ``brew upgrade`` moves one of these packages to a new major version, ``import pylibfranka`` fails until you rebuild it with ``pip install --force-reinstall --no-cache-dir ./pylibfranka`` (or the ``git+https://...`` URL above).
+- If the conda ``base`` environment is on your ``PATH`` (for example when installing into ``base`` itself), its ``fmt`` package conflicts with Homebrew's and the build fails at link time. Use a separate environment, or prefix the ``pip install`` and ``cmake`` commands with ``CMAKE_PREFIX_PATH=/opt/homebrew``.
+- macOS is not a real-time operating system. libfranka runs the control thread with the Mach time-constraint policy, but connect the robot via wired Ethernet and check with libfranka's ``communication_test`` example that your setup keeps up with the 1 kHz control loop. From the repository root:
+
+  .. code-block:: bash
+
+     cmake -B build -DCMAKE_BUILD_TYPE=Release
+     cmake --build build -j
+     ./build/examples/communication_test <robot_ip>
 
 Build and Install
 ~~~~~~~~~~~~~~~~~
